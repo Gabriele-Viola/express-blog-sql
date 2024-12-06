@@ -1,9 +1,7 @@
-const { title } = require('process');
 const ricette = require('../database/db.js')
 const fs = require('fs');
 const connection = require('../database/connection.js')
-const send = require('send');
-const { count } = require('console');
+
 
 const index = (req, res) => {
 
@@ -19,23 +17,39 @@ const index = (req, res) => {
         }
         res.status(200).json(responseData)
     })
-
-    // res.json({
-    //     data: ricette,
-    //     count: ricette.length
-    // })
 }
 
 const show = (req, res) => {
+    const id = req.params.slug
+    console.log('questo', id);
+    console.log(req.params);
 
 
-    const ricetta = ricette.find((ricetta) => ricetta.slug === req.params.slug)
+    const sql = 'SELECT * FROM posts WHERE id=?'
 
+    const tagsSql = 'SELECT tags.* FROM tags JOIN post_tag ON tags.id = post_tag.tag_id WHERE post_tag.post_id = ?'
 
-    if (!ricetta) {
-        return res.status(404).json({ error: "Nessuna ricetta trovata" })
-    }
-    return res.status(200).json({ data: ricetta })
+    connection.query(sql, [id], (err, results) => {
+        if (err) return res.status(500).json({ error: err })
+        if (!results[0]) return res.status(404).json({ error: `404! NO item found with slug: ${id}` })
+
+        const ricetta = results[0]
+
+        connection.query(tagsSql, [id], (err, tagsRes) => {
+
+            if (err) return res.status(500).json({ error: err })
+
+            ricetta.tags = tagsRes
+
+            const respData = {
+                data: ricetta
+            }
+
+            res.status(200).json(respData)
+
+        })
+    })
+
 }
 
 const store = (req, res) => {
@@ -89,29 +103,15 @@ const destroy = (req, res) => {
     const id = req.params.slug
     console.log(id);
 
-    const ricetta = ricette.find(ricetta => ricetta.slug.toLowerCase() === id)
-    console.log(ricetta);
-
-    if (!ricetta) {
-        return res.status(404).json({
-            error: `Nessuna ricetta con nome ${id} è presente da eliminare`
-        })
-    }
-    const newRicette = ricette.filter(ricetta => ricetta.slug.toLowerCase() !== req.params.slug)
-    fs.writeFileSync('./database/db.js', `module.exports = ${JSON.stringify(newRicette, null, 4)}`)
-    return res.status(200).json({
-        data: newRicette,
-        counter: newRicette.length
+    const sql = 'DELETE FROM posts WHERE id=?'
+    connection.query(sql, [id], (err, results) => {
+        console.log(err, results);
+        if (err) return res.status(500).json({ error: err })
+        if (results.affectedRows === 0) return res.status(404).json({ error: `404! no item found with with this slug: ${id}` })
+        return res.json({ status: 204, affectedRows: results.affectedRows })
     })
 }
-// const showFilterTags = (req, res) =>{
-//     console.log(req.params.tags);
 
-//     // const filterTags = ricette.filter( (ricetta) => ricetta.tags === req.params.tags)
-//     // res.json({
-//     //     tags: 
-//     // })
-// }
 
 module.exports = {
     index,
